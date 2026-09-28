@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide",
 )
 
-MODEL_PATH = Path("best_diabetes_model - Copy.pkl")
+MODEL_PATH = Path("best_diabetes_model.pkl")
 
 # ---------------------------------------------------------------------------
 # Feature metadata (Pima Indians Diabetes style).
