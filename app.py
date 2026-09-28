@@ -3,15 +3,14 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# SHIM — must run BEFORE joblib.load() so the pickled pipeline can find the
-# custom `train.DiabetesFeatureEngineer` class at unpickle time.
+# SHIM — must run BEFORE joblib.load(). The pickle references the class as
+# __main__.DiabetesFeatureEngineer (because train.py was run as a script),
+# so we register it on BOTH 'train' and '__main__' to cover every case.
 # -----------------------------------------------------------------------------
 import sys, types
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
-
-_mod = types.ModuleType("train")
 
 class _DiabetesFeatureEngineer(BaseEstimator, TransformerMixin):
     ZERO_AS_NAN = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
@@ -46,10 +45,15 @@ class _DiabetesFeatureEngineer(BaseEstimator, TransformerMixin):
                      'Insulin_Glucose', 'BMI_Age_ratio']
         return np.asarray(base, dtype=object)
 
-_mod.DiabetesFeatureEngineer = _DiabetesFeatureEngineer
-sys.modules["train"] = _mod
+# Register under BOTH module paths the pickle might reference
+_train_mod = types.ModuleType("train")
+_train_mod.DiabetesFeatureEngineer = _DiabetesFeatureEngineer
+sys.modules["train"] = _train_mod
+
+import __main__
+__main__.DiabetesFeatureEngineer = _DiabetesFeatureEngineer
 # -----------------------------------------------------------------------------
-# END SHIM — now safe to import streamlit + joblib and load the model
+# END SHIM
 # -----------------------------------------------------------------------------
 
 import joblib
@@ -112,13 +116,12 @@ st.write("✅ Model loaded successfully")  # remove once confirmed working
 def infer_feature_order(m) -> list[str]:
     """Try to recover the training-time raw feature order from the estimator."""
     candidates = [m]
-    if hasattr(m, "named_steps"):                      # sklearn Pipeline
+    if hasattr(m, "named_steps"):
         candidates += list(m.named_steps.values())
     for obj in candidates:
         names = getattr(obj, "feature_names_in_", None)
         if names is not None:
             names = [str(n) for n in names]
-            # Keep only the raw columns the user actually supplies
             raw = [n for n in names if n in FEATURE_SPECS]
             if raw:
                 return raw
